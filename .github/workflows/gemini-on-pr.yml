@@ -1,0 +1,30 @@
+name: Trigger Gemini on PR Creation
+
+on:
+  pull_request:
+    types: [opened]
+
+jobs:
+  trigger-gemini:
+    if: github.event.pull_request.state == 'open'
+    runs-on: [self-hosted]
+    permissions:
+      pull-requests: write
+      contents: read
+    steps:
+      - name: Post Gemini trigger comment
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.USER_PAT }}
+          script: |
+            const prNumber = context.payload.pull_request.number;
+            const comment = '/gemini review';
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+              body: comment
+            });
+
+            console.log(`Posted Gemini trigger comment to PR #${prNumber}`);

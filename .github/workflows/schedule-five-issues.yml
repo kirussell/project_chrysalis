@@ -1,0 +1,59 @@
+name: Trigger Claude on Ready Issues (JS)
+on:
+  workflow_dispatch: # Manual trigger
+
+jobs:
+  comment-on-issues:
+    runs-on: [self-hosted]
+    permissions:
+      issues: write
+    steps:
+      - name: Comment on top 5 ready issues
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.USER_PAT }}
+          script: |
+            // 1. Fetch only the first 5 open issues with the 'ready' label
+            const issues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'ready',
+              per_page: 5 // Limits the result to 5 issues
+            });
+
+            if (issues.data.length === 0) {
+              console.log('No "ready" issues found.');
+              return;
+            }
+
+            console.log(`Found ${issues.data.length} issues. Processing...`);
+
+            // 2. Iterate and comment
+            for (const issue of issues.data) {
+              console.log(`Commenting on issue #${issue.number}...`);
+              
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                body: '@claude 1. implement this feature / 2. when finished form a description for a change / 3. run gh pr create with correponding information against main branch 4. now you can consider task finished'
+              });
+
+              // Remove 'ready' label and add 'WIP' label
+              await github.rest.issues.removeLabel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                name: 'ready'
+              });
+
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                labels: ['WIP']
+              });
+
+              console.log(`Issue #${issue.number} labeled as WIP.`);
+            }

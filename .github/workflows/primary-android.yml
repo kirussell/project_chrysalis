@@ -1,0 +1,119 @@
+name: Primary Android CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  primary-android:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Git clone (shallow clone with depth 2, similar to Bitrise)
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      # Check translations
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Check translations
+        working-directory: mobile/scripts
+        run: |
+          set -e
+          set -o pipefail
+          set -x
+          python3 check_missing_translations.py
+          python3 search_unused_strings.py
+
+      # Setup Flutter (version 3.38.5 to match Bitrise)
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.38.5'
+          cache: true
+
+      # Setup Java 17 for Android builds
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          cache: 'gradle'
+
+      # Flutter analyze
+      - name: Run Flutter analyze
+        working-directory: mobile
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings
+
+      # Fix for Flutter Test (activate junitreport)
+      - name: Activate junitreport
+        run: flutter pub global activate junitreport
+
+      # Flutter test
+      - name: Run Flutter tests
+        working-directory: mobile
+        run: flutter test
+
+      # Check web_portal changes
+      - name: Check web_portal changes
+        id: check_web_changes
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+        run: |
+          set -e
+          set -x
+
+          # Determine the base for git diff
+          if [[ -n "$PR_NUMBER" ]]; then
+            # For PRs, compare against the base branch
+            DIFF_BASE="origin/$BASE_REF"
+            echo "PR build detected. Diffing against base branch: $DIFF_BASE"
+          else
+            # For direct pushes, compare against the previous commit
+            DIFF_BASE="HEAD~1"
+            echo "Push build detected. Diffing against previous commit: $DIFF_BASE"
+          fi
+
+          # Verify that DIFF_BASE exists before running git diff
+          if ! git cat-file -e "$DIFF_BASE^{commit}" 2>/dev/null; then
+            echo "Warning: $DIFF_BASE does not exist (shallow clone or first commit). Building web to be safe."
+            echo "SKIP_WEB_BUILD=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # Check if web_portal/ directory has changes
+          if git diff --quiet "$DIFF_BASE" HEAD -- web_portal/; then
+            echo "No changes detected in web_portal/ directory"
+            echo "SKIP_WEB_BUILD=true" >> $GITHUB_OUTPUT
+          else
+            echo "Changes detected in web_portal/ directory"
+            echo "SKIP_WEB_BUILD=false" >> $GITHUB_OUTPUT
+          fi
+
+      # Build web portal (conditionally)
+      - name: Build web portal
+        if: steps.check_web_changes.outputs.SKIP_WEB_BUILD == 'false'
+        working-directory: web_portal
+        run: flutter build web
+
+      # Note: Skipping keystore download as it requires secrets
+      # Add this step when you configure secrets:
+      # - name: Download Android keystore
+      #   run: |
+      #     mkdir -p $HOME/keystores
+      #     curl -o $HOME/keystores/iff.keystore "${{ secrets.ANDROID_KEYSTORE_URL }}"
+
+      # Build Android app bundle
+      - name: Build Android debug apk
+        working-directory: mobile
+        run: flutter build apk --debug --no-pub

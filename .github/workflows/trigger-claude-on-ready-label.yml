@@ -1,0 +1,44 @@
+name: Trigger Claude on Ready Label
+on:
+  issues:
+    types: [labeled]
+
+jobs:
+  comment-on-ready-issue:
+    if: github.event.label.name == 'ready'
+    runs-on: [self-hosted]
+    permissions:
+      issues: write
+    steps:
+      - name: Comment on issue with ready label
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.USER_PAT }}
+          script: |
+            const issueNumber = context.issue.number;
+            console.log(`Commenting on issue #${issueNumber} with ready label...`);
+
+            // Post the Claude trigger comment
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber,
+              body: '@claude 1. implement this feature / 2. when finished form a description for a change / 3. run gh pr create with correponding information against main branch 4. now you can consider task finished'
+            });
+
+            // Remove 'ready' label and add 'WIP' label
+            await github.rest.issues.removeLabel({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber,
+              name: 'ready'
+            });
+
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber,
+              labels: ['WIP']
+            });
+
+            console.log(`Issue #${issueNumber} labeled as WIP.`);

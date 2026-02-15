@@ -1,0 +1,29 @@
+name: Bump Version Code
+
+on:
+  workflow_dispatch: # Manual trigger
+
+jobs:
+  bump-version:
+    runs-on: [self-hosted, Linux]
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.USER_PAT }}
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Configure Git
+        run: |
+          git config --global user.name "kirussell"
+          git config --global user.email "ruslan@ifeelfood.co"
+
+      - name: Bump version code
+        run: python mobile/scripts/bump.py code --submit
