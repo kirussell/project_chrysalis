@@ -29,7 +29,7 @@ echo "Configuring runner: $RUNNER_NAME"
     --token "$GITHUB_TOKEN" \
     --name "$RUNNER_NAME" \
     --work "_work" \
-    --labels "docker,arm64" \
+    --labels "docker,arm64,gh" \
     --replace \
     --unattended
 
