@@ -11,6 +11,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     ca-certificates \
     git \
+    unzip \
     build-essential \
     libssl-dev \
     libffi-dev \
